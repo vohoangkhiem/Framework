@@ -29,8 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -51,16 +51,16 @@ jobs:
       # (owned by a different uid), which Firefox/WebKit refuse to launch under.
       HOME: /root
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: npm ci
       - run: npx playwright test --project=api --project=framework
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: api-report
           path: playwright-report/
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: failure()
         with:
           name: api-test-results
@@ -87,7 +87,7 @@ jobs:
       # (owned by a different uid), which Firefox/WebKit refuse to launch under.
       HOME: /root
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: npm ci
       - name: Run UI suites on Chromium, Firefox and WebKit
         run: >
@@ -95,14 +95,14 @@ jobs:
           --project=chromium --project=firefox --project=webkit
           --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - name: Upload blob report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: blob-report-${{ matrix.shardIndex }}
           path: blob-report/
           retention-days: 3
       - name: Upload failure artifacts (traces, videos, screenshots)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: failure()
         with:
           name: test-results-${{ matrix.shardIndex }}
@@ -116,21 +116,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: Download blob reports from all shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: all-blob-reports
           pattern: blob-report-*
           merge-multiple: true
       - name: Merge into a single HTML report
         run: node scripts/merge-reports.js all-blob-reports playwright-report
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: playwright-report
           path: playwright-report/
