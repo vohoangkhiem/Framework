@@ -1,0 +1,76 @@
+# GitLab CI pipeline: quality gate -> API + framework self-tests and sharded UI suites -> merged report.
+# Secrets: define TEST_USERNAME / TEST_PASSWORD as masked CI/CD variables (Settings > CI/CD > Variables).
+# The Playwright image ships the browsers and OS dependencies; keep its tag in sync with package.json.
+image: mcr.microsoft.com/playwright:v1.61.1-jammy
+
+stages:
+  - quality
+  - test
+  - report
+
+variables:
+  CI: "true"
+  HUSKY: "0"
+  LOG_FORMAT: json
+  TEST_ENV: dev
+  EXCLUDE_TAGS: "@wip|@flaky"
+  WORKERS: "2"
+  GIT_DEPTH: "1"
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+
+default:
+  interruptible: true
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  before_script:
+    - npm ci --prefer-offline
+
+quality:
+  stage: quality
+  script:
+    - npm run validate
+
+api-tests:
+  stage: test
+  needs: [quality]
+  script:
+    - npx playwright test --project=api --project=framework
+  artifacts:
+    when: always
+    expire_in: 2 weeks
+    paths:
+      - playwright-report/
+      - test-results/
+    reports:
+      junit: test-results/junit.xml
+
+# Three parallel shards; each runs Chromium, Firefox and WebKit and produces a blob report.
+ui-tests:
+  stage: test
+  needs: [quality]
+  parallel: 3
+  script:
+    - npx playwright test --project=chromium --project=firefox --project=webkit --shard=$CI_NODE_INDEX/$CI_NODE_TOTAL
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - blob-report/
+      - test-results/
+
+merge-report:
+  stage: report
+  needs: [ui-tests]
+  when: always
+  script:
+    - node scripts/merge-reports.js blob-report playwright-report
+  artifacts:
+    expire_in: 1 month
+    paths:
+      - playwright-report/
+    reports:
+      junit: test-results/junit.xml

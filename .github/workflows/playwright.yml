@@ -1,0 +1,129 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  # Nightly full run.
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+# Cancel superseded runs of the same branch to save minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  HUSKY: 0
+  TEST_ENV: dev
+  LOG_FORMAT: json
+  EXCLUDE_TAGS: "@wip|@flaky"
+
+jobs:
+  quality:
+    name: Typecheck, lint, format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+
+  api-tests:
+    name: API and framework self-tests
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npx playwright test --project=api --project=framework
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-report
+          path: playwright-report/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: api-test-results
+          path: test-results/
+          retention-days: 7
+
+  ui-tests:
+    name: UI tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-jammy
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3]
+        shardTotal: [3]
+    env:
+      TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+      WORKERS: 2
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - name: Run UI suites on Chromium, Firefox and WebKit
+        run: >
+          npx playwright test
+          --project=chromium --project=firefox --project=webkit
+          --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+      - name: Upload blob report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blob-report-${{ matrix.shardIndex }}
+          path: blob-report/
+          retention-days: 3
+      - name: Upload failure artifacts (traces, videos, screenshots)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ matrix.shardIndex }}
+          path: test-results/
+          retention-days: 7
+
+  merge-reports:
+    name: Merge sharded reports
+    if: always()
+    needs: ui-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Download blob reports from all shards
+        uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+      - name: Merge into a single HTML report
+        run: node scripts/merge-reports.js all-blob-reports playwright-report
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30

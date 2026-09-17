@@ -1,0 +1,78 @@
+name: Manual Test Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        default: dev
+        options: [dev, staging, prod]
+      project:
+        description: Playwright project
+        type: choice
+        default: chromium
+        options:
+          [
+            chromium,
+            firefox,
+            webkit,
+            api,
+            framework,
+            mobile-chrome,
+            mobile-safari,
+            all-browsers,
+            all-mobile,
+          ]
+      tags:
+        description: Tag filter regex for --grep (e.g. @smoke|@regression). Empty runs everything.
+        type: string
+        default: "@smoke"
+      exclude_tags:
+        description: Tag filter regex for --grep-invert
+        type: string
+        default: "@wip|@flaky"
+
+env:
+  CI: true
+  HUSKY: 0
+  LOG_FORMAT: json
+  TEST_ENV: ${{ inputs.environment }}
+  TEST_TAGS: ${{ inputs.tags }}
+  EXCLUDE_TAGS: ${{ inputs.exclude_tags }}
+  TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+  TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+
+jobs:
+  test:
+    name: Run ${{ inputs.project }} on ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - name: Resolve project flags
+        id: projects
+        run: |
+          if [ "${{ inputs.project }}" = "all-browsers" ]; then
+            echo "flags=--project=chromium --project=firefox --project=webkit" >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.project }}" = "all-mobile" ]; then
+            echo "flags=--project=mobile-chrome --project=mobile-safari" >> "$GITHUB_OUTPUT"
+          else
+            echo "flags=--project=${{ inputs.project }}" >> "$GITHUB_OUTPUT"
+          fi
+      - run: npx playwright test ${{ steps.projects.outputs.flags }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ inputs.project }}-${{ inputs.environment }}
+          path: playwright-report/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ inputs.project }}-${{ inputs.environment }}
+          path: test-results/
+          retention-days: 7

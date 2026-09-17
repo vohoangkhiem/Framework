@@ -1,0 +1,25 @@
+# Usage:
+#   docker compose run --rm tests                                  # full suite
+#   docker compose run --rm tests npx playwright test --project=api
+#   TEST_TAGS=@smoke docker compose run --rm tests
+# Secrets are read from the host environment (or a local .env file) and never baked into the image.
+services:
+  tests:
+    build: .
+    image: demoblaze-playwright-framework:local
+    environment:
+      CI: "true"
+      TEST_ENV: ${TEST_ENV:-dev}
+      TEST_USERNAME: ${TEST_USERNAME:-}
+      TEST_PASSWORD: ${TEST_PASSWORD:-}
+      TEST_TAGS: ${TEST_TAGS:-}
+      EXCLUDE_TAGS: ${EXCLUDE_TAGS:-@wip|@flaky}
+      WORKERS: ${WORKERS:-2}
+      LOG_FORMAT: json
+    volumes:
+      - ./playwright-report:/app/playwright-report
+      - ./test-results:/app/test-results
+      - ./blob-report:/app/blob-report
+    # Chromium needs a larger shared memory segment than Docker's 64 MB default.
+    shm_size: 1gb
+    init: true

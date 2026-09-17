@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "test: demo flows (3 browsers)",
+      "type": "shell",
+      "command": "npm run test:demo",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "test: smoke",
+      "type": "shell",
+      "command": "npm run test:smoke",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "test: api",
+      "type": "shell",
+      "command": "npm run test:api",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "test: UI mode",
+      "type": "shell",
+      "command": "npm run test:ui-mode",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "quality: validate (typecheck + lint + format)",
+      "type": "shell",
+      "command": "npm run validate",
+      "group": "build",
+      "problemMatcher": ["$tsc", "$eslint-stylish"]
+    },
+    {
+      "label": "report: open last HTML report",
+      "type": "shell",
+      "command": "npm run report",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "setup: install browsers",
+      "type": "shell",
+      "command": "npx playwright install",
+      "problemMatcher": []
+    }
+  ]
+}

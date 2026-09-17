@@ -1,0 +1,49 @@
+# Artillery smoke scenario for the Demoblaze catalog API.
+#   npx artillery run performance/artillery/api-smoke.yml
+config:
+  target: "{{ $processEnvironment.API_BASE_URL || 'https://api.demoblaze.com' }}"
+  phases:
+    - duration: 30
+      arrivalRate: 2
+      name: warm-up
+    - duration: 60
+      arrivalRate: 5
+      name: steady-load
+  ensure:
+    thresholds:
+      - http.response_time.p95: 1500
+      - http.response_time.p99: 3000
+    conditions:
+      - expression: http.codes.200 > 0
+  defaults:
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+
+scenarios:
+  - name: browse-catalog
+    flow:
+      - get:
+          url: /entries
+          expect:
+            - statusCode: 200
+            - hasProperty: Items
+      - post:
+          url: /bycat
+          json:
+            cat: phone
+          expect:
+            - statusCode: 200
+      - post:
+          url: /view
+          json:
+            id: "1"
+          expect:
+            - statusCode: 200
+            - equals:
+                - "{{ title }}"
+                - "Samsung galaxy s6"
+          capture:
+            - json: $.title
+              as: title
+      - think: 1

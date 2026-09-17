@@ -1,0 +1,20 @@
+# Dependencies & generated output
+node_modules/
+dist/
+coverage/
+
+# Test artifacts
+test-results/
+playwright-report/
+blob-report/
+.auth/
+
+# Lock files and binary/user-owned files
+package-lock.json
+*.xlsx
+*.png
+*.zip
+*.webm
+
+# Git hook scripts are plain shell
+.husky/

@@ -1,0 +1,11 @@
+export { BasePage } from './base.page';
+export { HomePage } from './home.page';
+export { LoginPage } from './login.page';
+export { SignUpPage } from './signup.page';
+export { ProductPage, type AddToCartOutcome } from './product.page';
+export { CartPage } from './cart.page';
+export { PlaceOrderPage } from './place-order.page';
+export { BaseComponent } from './components/base.component';
+export { HeaderComponent } from './components/header.component';
+export { ModalComponent } from './components/modal.component';
+export { OrderConfirmationComponent } from './components/order-confirmation.component';

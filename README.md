@@ -1,0 +1,336 @@
+# Demoblaze Test Automation Framework
+
+Production-ready UI and API test automation framework for [Demoblaze](https://www.demoblaze.com/), built with **Playwright 1.61** and **TypeScript 5 (strict)**. It is designed as a template for large projects: layered architecture, fixture-based dependency injection, API-driven preconditions, validated multi-environment configuration, rich diagnostics, and CI pipelines with sharding.
+
+- [Quick start](#quick-start)
+- [Framework structure](#framework-structure)
+- [Key design decisions](#key-design-decisions)
+- [Configuration and secrets](#configuration-and-secrets)
+- [Running tests](#running-tests)
+- [Demo scripts](#demo-scripts)
+- [Reporting and diagnostics](#reporting-and-diagnostics)
+- [Code quality](#code-quality)
+- [CI/CD](#cicd)
+  - [Jenkins](#jenkins)
+  - [GitHub Actions](#github-actions)
+  - [GitLab CI](#gitlab-ci)
+  - [Docker](#docker)
+- [Scaling the framework for large projects](#scaling-the-framework-for-large-projects)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick start
+
+Prerequisites: **Node.js >= 18.18** (20 LTS recommended, see `.nvmrc`) and **npm >= 9**.
+
+```bash
+npm ci                          # install dependencies (also installs git hooks when in a git repo)
+npx playwright install          # download Chromium, Firefox and WebKit
+cp .env.example .env            # set TEST_USERNAME / TEST_PASSWORD for the shared account
+npm run test:demo               # login + place-order flows on Chromium, Firefox and WebKit
+npm run report                  # open the HTML report
+```
+
+`TEST_USERNAME` / `TEST_PASSWORD` identify a shared account used by negative login tests and the
+storage-state demo. The `setup` project creates it automatically if it does not exist yet. Any
+value works on Demoblaze; pick something unique to you.
+
+---
+
+## Framework structure
+
+```
+.
+├── .github/workflows/        CI: quality gate + sharded matrix + report merge (also nightly); manual run
+├── .github/                  Pull request template with the definition-of-done checklist
+├── .husky/                   pre-commit (lint-staged + typecheck) and commit-msg hooks
+├── .vscode/                  Recommended extensions, settings and tasks
+├── docs/                     ARCHITECTURE, TEST_STRATEGY, CONTRIBUTING, adr/, templates/
+├── environments/             .env.dev | .env.staging | .env.prod (committed, no secrets)
+├── performance/              k6/ and artillery/ load-test scaffolding
+├── scripts/                  clean-results, merge-reports, setup-hooks, verify-commit-msg
+├── src/
+│   ├── api/                  API layer
+│   │   ├── clients/          BaseApiClient + Auth/Catalog/Cart clients (typed, retrying, logged)
+│   │   ├── models/           Request/response DTOs and runtime type guards
+│   │   ├── schemas/          Zod contracts used by clients and the toMatchSchema matcher
+│   │   ├── preconditions/    API-based state: ensureUserExists, authenticateContext, seed carts
+│   │   ├── mocks/            RouteMocker (page.route wrapper with CORS/preflight handling) + data
+│   │   └── interceptors/     NetworkRecorder (passive request/response log for assertions)
+│   ├── config/               env.schema (Zod), environment (typed config), test-tags, global hooks
+│   ├── core/                 logger, errors, retry, WaitUtils, @step decorator
+│   ├── data/                 static/ catalog & messages, builders/, factories/ (Faker), test-cases/
+│   ├── db/                   DatabaseClient contract, factory, Postgres/MySQL/Mongo adapters, repositories/
+│   ├── fixtures/             base | page | api | auth | data fixture groups, custom matchers, index
+│   ├── models/               Domain types (user, product, order)
+│   ├── pages/                Page objects + components/ (header, modal, order confirmation)
+│   ├── reporting/            SummaryReporter: per-project table for console, artifacts and GitHub job summary
+│   ├── utils/                string, random, date, number, json, file, storage, dialog, screenshot, performance
+│   └── workflows/            Multi-page business journeys (auth, cart/checkout)
+├── tests/
+│   ├── api/                  auth-api, products-api, cart-api           (project: api)
+│   ├── ui/                   authentication/, checkout/, catalog/       (chromium | firefox | webkit)
+│   ├── e2e/                  place-order journey
+│   ├── mobile/               phone-viewport shopping journey            (mobile-chrome | mobile-safari)
+│   ├── performance/          timing budgets collected during functional runs
+│   ├── framework/            self-tests of the framework (dialog handling, retry, config, utils)
+│   ├── setup/                auth.setup: shared account + authenticated storage state
+│   ├── accessibility/        reserved (README explains how to start)
+│   ├── contract/             reserved
+│   └── visual/               reserved
+├── .env.example              Every supported variable, documented (.env itself is git-ignored)
+├── .eslintrc.js  .prettierrc  .prettierignore  .editorconfig  .lintstagedrc.json  .nvmrc
+├── Dockerfile  docker-compose.yml  .dockerignore
+├── Jenkinsfile               Parameterised declarative pipeline with dynamic sharding
+├── .gitlab-ci.yml            GitLab pipeline: quality gate, API + framework tests, 3 UI shards, merged report
+├── package.json  playwright.config.ts  tsconfig.json
+└── README.md  CHANGELOG.md
+```
+
+---
+
+## Key design decisions
+
+Full rationale lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and the ADRs under
+[`docs/adr/`](docs/adr). In short:
+
+| Decision                                                                               | Why it matters at scale                                                                                                       |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Layered architecture** (tests -> fixtures -> workflows/pages/api -> data/utils/core) | Selectors, waits and API details live in exactly one layer; specs read as business intent.                                    |
+| **Fixture groups composed with `mergeTests`**                                          | New concerns (db, feature flags) are one file + one line; every spec gets typed access to everything.                         |
+| **API preconditions, UI verification** (ADR-0002)                                      | Users and carts are created through the API in milliseconds; UI flows are exercised only where they are the subject.          |
+| **Validated, layered configuration** (ADR-0003)                                        | Zod schema for all env vars; `process env > .env > environments/.env.<env> > defaults`; misconfiguration fails fast.          |
+| **Web-first assertions, no sleeps**                                                    | Page objects expose `expectXxx()` built on auto-waiting `expect`; responses are awaited via `WaitUtils.forApiResponse`.       |
+| **`@step` decorator on page/workflow methods**                                         | HTML report and trace viewer show a readable narrative without manual `test.step` calls.                                      |
+| **Diagnostics on failure only** (ADR-0004)                                             | Trace + video + screenshot + console errors + network log + structured test log, attached only when a test fails.             |
+| **Unique data per test**                                                               | Time-based unique usernames and a per-context cart cookie make parallel workers and retries collision-free.                   |
+| **Tag filters per project, `setup` never filtered** (ADR-0005)                         | `TEST_TAGS=@smoke` in CI, Docker or `.env` keeps the shared-account setup and storage state; only the selected suites shrink. |
+| **Framework self-tests** (`tests/framework`)                                           | Dialog handling, retry/backoff, configuration parsing and data utilities are tested like production code.                     |
+| **Strict TypeScript, type-aware ESLint, `any` forbidden**                              | Un-awaited promises (the #1 flakiness source) and unsafe types are lint errors, enforced by pre-commit hooks and CI.          |
+
+---
+
+## Configuration and secrets
+
+All configuration flows through `src/config/environment.ts`, which validates every variable
+against `src/config/env.schema.ts` and exposes an immutable `config` object.
+
+Resolution order (highest wins): real process environment (CI secrets, `cross-env`) -> `.env`
+(local, git-ignored) -> `environments/.env.<TEST_ENV>` (committed, no secrets) -> schema defaults.
+
+| Variable                                                                                     | Purpose                                                         | Default                                                       |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| `TEST_ENV`                                                                                   | Selects `environments/.env.<env>`: `dev`, `staging`, `prod`     | `dev`                                                         |
+| `BASE_URL`, `API_BASE_URL`                                                                   | Application and API under test                                  | Demoblaze URLs                                                |
+| `TEST_USERNAME`, `TEST_PASSWORD`                                                             | Shared account (secret; from `.env` or the CI credential store) | empty                                                         |
+| `HEADLESS`                                                                                   | Headless browsers (always true in CI)                           | `true`                                                        |
+| `DEFAULT_TIMEOUT`, `ACTION_TIMEOUT`, `NAVIGATION_TIMEOUT`, `EXPECT_TIMEOUT`                  | Timeouts in ms                                                  | 60000 / 15000 / 30000 / 10000                                 |
+| `LOCAL_RETRIES`, `CI_RETRIES`                                                                | Retries locally / in CI                                         | 0 / 2                                                         |
+| `WORKERS`                                                                                    | Parallel workers, number or percentage (`4`, `50%`)             | Playwright default / `50%` in CI                              |
+| `TEST_TAGS`, `EXCLUDE_TAGS`                                                                  | Regex mapped to `--grep` / `--grep-invert`                      | none                                                          |
+| `OUTPUT_DIR`                                                                                 | Artifact folder (traces, videos, screenshots, junit/json)       | `test-results`                                                |
+| `TRACE_MODE`, `VIDEO_MODE`, `SCREENSHOT_MODE`                                                | Artifact policy                                                 | `retain-on-failure` / `retain-on-failure` / `only-on-failure` |
+| `LOG_LEVEL`, `LOG_FORMAT`                                                                    | `debug\|info\|warn\|error\|silent`, `pretty\|json`              | `info`, `pretty`                                              |
+| `API_RETRIES`, `API_TIMEOUT`                                                                 | API client retry count and per-request timeout                  | 2, 15000                                                      |
+| `DB_TYPE`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_CONNECTION_STRING` | Optional database access                                        | unset                                                         |
+
+Secrets are never committed: `.env` is git-ignored, `environments/*` contain no credentials,
+Jenkins injects them with `withCredentials`, GitHub Actions with `secrets.*`, and the logger
+redacts any key that looks like a password, token or cookie.
+
+---
+
+## Running tests
+
+| Command                                                                    | What it does                                                             |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `npm test`                                                                 | Clean artifacts, then run every project (setup, api, 3 desktop browsers) |
+| `npm run test:demo`                                                        | The two demo flows on Chromium, Firefox and WebKit                       |
+| `npm run test:smoke` / `npm run test:regression`                           | Tag-based suites                                                         |
+| `npm run test:api`                                                         | Browser-less API project                                                 |
+| `npm run test:framework`                                                   | Framework self-tests (dialog handling, retry, config schema, utilities)  |
+| `npm run test:mobile`                                                      | Phone-viewport journeys on Pixel 7 (Chromium) and iPhone 14 (WebKit)     |
+| `npm run test:ui` / `npm run test:e2e`                                     | UI feature tests / end-to-end journeys                                   |
+| `npm run test:chromium` / `test:firefox` / `test:webkit` / `test:browsers` | Per browser / all three                                                  |
+| `npm run test:headed` / `test:debug` / `test:ui-mode`                      | Local development modes                                                  |
+| `npm run test:staging` / `npm run test:prod`                               | Switch environment (`prod` is restricted to `@smoke`)                    |
+| `npm run report` / `npm run trace -- <trace.zip>`                          | Open the HTML report / a trace                                           |
+
+Everything is also available through the Playwright CLI, for example:
+
+```bash
+npx playwright test tests/ui/checkout --project=firefox --grep @regression --grep-invert @flaky
+npx playwright test --shard=2/4 --project=chromium        # CI sharding
+npx cross-env TEST_TAGS="@smoke|@cart" playwright test    # tag filter via environment
+```
+
+Tags are constants in `src/config/test-tags.ts`: suite (`@smoke`, `@regression`, `@e2e`), layer
+(`@ui`, `@api`, `@performance`, `@mobile`, `@framework`), feature (`@auth`, `@catalog`, `@cart`,
+`@checkout`) and nature (`@negative`, `@edge-case`, `@mock`, `@flaky`, `@wip`). Filters apply to
+the selected suites only; the `setup` project always runs when a browser project runs (ADR-0005).
+
+---
+
+## Demo scripts
+
+### 1. Logging in with valid credentials - `tests/ui/authentication/login.spec.ts`
+
+- **Valid credentials** (parameterised): freshly registered user, 30-character username,
+  30-character password, password with special characters. Each user is created through the API
+  precondition, logged in through the UI, and verified by header state, closed modal and the
+  persisted session cookie.
+- **Session behaviour**: stays logged in after reload; logout clears the cookie; a session
+  injected through the API is recognised by the UI.
+- **Invalid credentials** (parameterised): wrong password, unknown user, empty username/password,
+  both empty, case-sensitivity. Alert text and anonymous header state are asserted.
+- **Edge cases**: dismissing the modal without submitting; API error surfaced from a mocked
+  `/login` response; username with surrounding spaces.
+- `tests/ui/authentication/session.spec.ts` shows the **storage-state** pattern (pre-authenticated
+  browser context produced by the `setup` project).
+
+### 2. Add product(s) to cart, then place an order - `tests/e2e/place-order.spec.ts` (+ `tests/ui/checkout/cart.spec.ts`)
+
+- **Successful purchases** (parameterised): all fields, mandatory fields only, name with special
+  characters, multiple products across categories. Products are added through the real UI
+  journey (category -> product page -> "Add to cart" alert + `/addtocart` response), the cart is
+  verified line by line and by total, then the confirmation dialog is parsed and checked (id,
+  amount, card, name, date) and the cart is confirmed empty afterwards.
+- **Validation**: missing name and card, missing name, missing card -> alert text, modal stays
+  open, cart untouched.
+- **Edge cases**: total recomputed after removing a line before checkout; closing the order form
+  keeps the cart; purchasing as a logged-in shopper (different alert text, authenticated cart).
+- Cart suite: correct items/totals for single, multi-category and duplicate products; request
+  payload verification via `NetworkRecorder`; empty cart for new visitors; deletion; persistence
+  across reloads; emptying the cart line by line.
+
+Run both demos on all three browsers:
+
+```bash
+npm run test:demo
+```
+
+---
+
+## Reporting and diagnostics
+
+- Reporters: `list` (console), `html` (`playwright-report/`), `junit` (`test-results/junit.xml`),
+  `json` (`test-results/results.json`), `SummaryReporter` (`src/reporting`: per-project pass/fail
+  table printed to the console, saved as `test-results/summary.md` and appended to the GitHub
+  Actions job summary); in CI also `blob` (`blob-report/`) for merging shards.
+- On failure: trace (`npx playwright show-trace`), video, screenshot, browser console errors,
+  the complete structured log of the test (its own lines plus every API call, precondition,
+  mocked route and navigation retry the framework performed for it) and, when the
+  `networkRecorder` fixture is used, the XHR log are attached to the test in the HTML report.
+  Successful tests keep no artifacts.
+- `ScreenshotUtils` produces named, timestamped evidence screenshots on demand.
+- `LOG_FORMAT=json` switches the logger to JSON lines for log aggregation in CI.
+
+---
+
+## Code quality
+
+- **TypeScript strict** plus `noUncheckedIndexedAccess`, `noImplicitOverride`, unused checks.
+- **ESLint** (`.eslintrc.js`): type-aware `typescript-eslint` rules, `no-explicit-any` and
+  `no-floating-promises` as errors, `eslint-plugin-playwright` for specs, Prettier integration.
+- **Prettier** (`.prettierrc`) formats TS, JS, JSON, Markdown and YAML.
+- **Husky + lint-staged**: `pre-commit` runs ESLint/Prettier on staged files and a type check;
+  `commit-msg` enforces Conventional Commits. Hooks install automatically via `npm ci` once the
+  folder is a git repository (`git init && npm run prepare`).
+- `npm run validate` = typecheck + lint + format check; CI runs it as the quality gate.
+- `npm run test:framework` runs the framework's own regression tests (`tests/framework`): the
+  dialog helper's timing contract, retry/backoff semantics, environment schema validation and the
+  data utilities that assertions depend on (Luhn card numbers, price parsing, catalog totals).
+  CI runs them next to the API project.
+
+---
+
+## CI/CD
+
+### Jenkins
+
+The root `Jenkinsfile` is a parameterised declarative pipeline:
+
+1. **Parameters**: `TEST_ENV`, `BROWSERS` (all/chromium/firefox/webkit), `RUN_API_TESTS`,
+   `TAGS`, `EXCLUDE_TAGS` (default `@wip|@flaky`), `SHARDS`, `WORKERS`.
+2. **Install**: `npm ci`, `npx playwright install --with-deps`.
+3. **Quality gate** (parallel): typecheck, lint, format check.
+4. **Test**: credentials are injected with `withCredentials` from the credential id
+   `demoblaze-test-user` (username -> `TEST_USERNAME`, password -> `TEST_PASSWORD`). With
+   `SHARDS > 1` the UI suites fan out to that many agents (`--shard=i/N`), each shard stashes its
+   blob report and the pipeline merges them with `npm run report:merge`.
+5. **Post**: JUnit results, HTML Publisher report, archived traces/videos for failures.
+
+Jenkins prerequisites: NodeJS plugin (tool named `NodeJS`), JUnit, HTML Publisher and Credentials
+Binding plugins. Cross-platform agents are supported (`sh` on Unix, `bat` on Windows).
+
+To run it: create a Pipeline job pointing at this repository (`Jenkinsfile` at the root), add the
+`demoblaze-test-user` credential, then "Build with Parameters".
+
+### GitHub Actions
+
+- `playwright.yml`: quality gate job, browser-less API + framework self-test job, UI matrix
+  sharded 3 ways across Chromium/Firefox/WebKit inside the official Playwright container, and a
+  job that merges the blob reports into a single HTML report artifact. Runs on push, pull request,
+  nightly (`schedule`) and on demand. Each job appends the run summary table to the job summary.
+  Secrets: `TEST_USERNAME`, `TEST_PASSWORD`.
+- `manual-tests.yml`: on-demand run with environment, project (desktop, mobile, api, framework)
+  and tag inputs.
+- `pull_request_template.md`: definition-of-done checklist from `docs/TEST_STRATEGY.md`.
+
+### GitLab CI
+
+`.gitlab-ci.yml` mirrors the GitHub pipeline with GitLab primitives: `quality` stage
+(`npm run validate`), `test` stage with the `api` + `framework` job and a `parallel: 3` UI job
+(`--shard=$CI_NODE_INDEX/$CI_NODE_TOTAL`), and a `report` stage that merges the shard blobs into
+one HTML report. JUnit results are published through `artifacts.reports.junit`; `npm` is cached per
+`package-lock.json`. Provide `TEST_USERNAME` / `TEST_PASSWORD` as masked CI/CD variables.
+
+### Docker
+
+```bash
+docker compose run --rm tests                                    # full run
+TEST_TAGS=@smoke docker compose run --rm tests                   # tag filter
+docker compose run --rm tests npx playwright test --project=api  # any CLI
+```
+
+The image is based on `mcr.microsoft.com/playwright:v1.61.1-jammy`; keep the tag aligned with
+the `@playwright/test` version. Reports are written to the mounted `playwright-report/` folder.
+
+---
+
+## Scaling the framework for large projects
+
+| Need                                     | How                                                                                                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hundreds of specs across teams           | One feature folder per team under `tests/ui/<feature>`; tags per feature; `CODEOWNERS` per folder.                                                                 |
+| New pages / components / workflows       | Extend `BasePage` / `BaseComponent`; register in `src/fixtures/page.fixtures.ts`; keep locators private to the page object.                                        |
+| New APIs                                 | Add a client extending `BaseApiClient`, a Zod schema and DTOs; expose through `api.fixtures.ts`; prefer preconditions over UI setup.                               |
+| New fixture concerns (db, feature flags) | New `src/fixtures/<group>.fixtures.ts`, add to `mergeTests` in `src/fixtures/index.ts`.                                                                            |
+| More environments                        | Add `environments/.env.<name>` and extend the `TEST_ENV` enum in `env.schema.ts`.                                                                                  |
+| Faster CI                                | Increase `SHARDS` (Jenkins) or the matrix (GitHub); `WORKERS` per shard; run `@smoke` on PRs and `@regression` nightly.                                            |
+| Test data at scale                       | Builders for intent, Faker factories for realistic defaults, static catalog pinned by an API drift test; `UserFactory.seed()` for repro.                           |
+| Database verification                    | `DbConnectionFactory.withConnection()` with the adapter for your engine; queries live in `src/db/repositories`.                                                    |
+| Visual / a11y / mobile / contract        | Mobile: `tests/mobile` on the `mobile-*` projects, `HeaderComponent.expandMenu()` for the collapsed nav. Visual, a11y and contract: reserved folders with READMEs. |
+| Load testing                             | `performance/k6` and `performance/artillery` scaffolds sharing the same environment variables.                                                                     |
+| Flaky tests                              | Quarantine with `@flaky` (excluded in CI by default), fix root cause in the framework layer, never add sleeps.                                                     |
+| Framework changes                        | Cover them in `tests/framework`; the suite runs in every pipeline next to the API project.                                                                         |
+
+See [`docs/TEST_STRATEGY.md`](docs/TEST_STRATEGY.md) and [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)
+for the operating model and conventions.
+
+---
+
+## Troubleshooting
+
+| Symptom                                          | Fix                                                                                                             |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `Invalid environment configuration` at startup   | Read the listed variables; check `.env` and `environments/.env.<TEST_ENV>`.                                     |
+| Setup project skipped / `sharedUser` tests fail  | Set `TEST_USERNAME` and `TEST_PASSWORD` (locally in `.env`, in CI as secrets).                                  |
+| Storage-state tests reported as skipped          | The `setup` project did not produce `.auth/user.json`; check its result in the report (credentials, API down).  |
+| Browsers missing                                 | `npx playwright install` (or `--with-deps` on Linux CI).                                                        |
+| `EPERM ... rmdir test-results` on Windows        | A sync client (e.g. Google Drive) or an open report locks the folder; run `npm run clean` or close the lock.    |
+| `worker-N process did not exit ... force-killed` | Cloud-sync file locks stall artifact cleanup. Set `OUTPUT_DIR` to a non-synced local path (see `.env.example`). |
+| Husky hooks not running                          | The folder must be a git repository: `git init && npm run prepare`.                                             |
+| Need to see what a failing test did              | `npm run report`, open the test, click the trace; or `npx playwright show-trace <path-to-trace.zip>`.           |
+| Demoblaze API slow or flaky                      | Retries are configured (`CI_RETRIES=2`); API clients retry 5xx automatically; check `LOG_LEVEL=debug`.          |
