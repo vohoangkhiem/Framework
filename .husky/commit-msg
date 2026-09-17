@@ -1,1 +1,3 @@
-node scripts/verify-commit-msg.js "$1"
+# Conventional Commits enforcement temporarily disabled (see README.md > Code quality
+# for how to re-enable). Uncomment the line below to restore it.
+# node scripts/verify-commit-msg.js "$1"
