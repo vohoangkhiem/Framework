@@ -45,6 +45,10 @@ jobs:
     timeout-minutes: 15
     container:
       image: mcr.microsoft.com/playwright:v1.61.1-jammy
+    env:
+      # The Playwright container runs as root; GitHub Actions mounts $HOME as /github/home
+      # (owned by a different uid), which Firefox/WebKit refuse to launch under.
+      HOME: /root
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
@@ -78,6 +82,9 @@ jobs:
       TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
       TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
       WORKERS: 2
+      # The Playwright container runs as root; GitHub Actions mounts $HOME as /github/home
+      # (owned by a different uid), which Firefox/WebKit refuse to launch under.
+      HOME: /root
     steps:
       - uses: actions/checkout@v4
       - run: npm ci

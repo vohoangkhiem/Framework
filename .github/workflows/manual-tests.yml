@@ -42,6 +42,9 @@ env:
   EXCLUDE_TAGS: ${{ inputs.exclude_tags }}
   TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
   TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+  # The Playwright container runs as root; GitHub Actions mounts $HOME as /github/home
+  # (owned by a different uid), which Firefox/WebKit refuse to launch under.
+  HOME: /root
 
 jobs:
   test:
