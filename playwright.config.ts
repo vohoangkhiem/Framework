@@ -68,6 +68,13 @@ function resolveWorkers(): number | string | undefined {
   return /^\d+$/.test(config.workers) ? Number(config.workers) : config.workers;
 }
 
+function resolveProjectWorkers(projectName: string): number | string | undefined {
+  if (projectName === 'webkit' && config.isCI) {
+    return 1;
+  }
+  return undefined;
+}
+
 export default defineConfig({
   testDir: './tests',
   testMatch: /.*\.(spec|setup)\.ts$/,
@@ -151,6 +158,7 @@ export default defineConfig({
       testIgnore: DESKTOP_IGNORE,
       dependencies: ['setup'],
       ...tagFilter,
+      workers: resolveProjectWorkers('webkit'),
       use: { ...devices['Desktop Safari'] },
     },
     {
