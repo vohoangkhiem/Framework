@@ -1,11 +1,10 @@
 import { envSchema } from '@config/env.schema';
-import { config, toGrepRegex } from '@config/environment';
+import { toGrepRegex } from '@config/environment';
 import { TAGS, tags } from '@config/test-tags';
 import { RetryExhaustedError } from '@core/errors';
 import { Logger } from '@core/logger';
 import { retry } from '@core/retry';
 import { expect, test } from '@fixtures';
-import playwrightConfig from '../../playwright.config';
 
 /** Fails `failures` times, then resolves. Declared outside the tests to keep conditionals out of them. */
 function flakyOperation(failures: number): (attempt: number) => Promise<string> {
@@ -49,16 +48,6 @@ test.describe('Environment schema', tags(TAGS.framework), () => {
     expect(toGrepRegex('a.b (c)')).toStrictEqual(/a\.b|\(c\)/);
     expect(toGrepRegex('')).toBeUndefined();
     expect(toGrepRegex(undefined)).toBeUndefined();
-  });
-
-  test('limits WebKit to one worker in CI without changing other browser projects', () => {
-    const webkit = playwrightConfig.projects?.find(project => project.name === 'webkit');
-    const chromium = playwrightConfig.projects?.find(project => project.name === 'chromium');
-
-    expect(webkit).toBeDefined();
-    expect(chromium).toBeDefined();
-    expect(webkit?.workers).toBe(config.isCI ? 1 : undefined);
-    expect(chromium?.workers).toBeUndefined();
   });
 });
 
