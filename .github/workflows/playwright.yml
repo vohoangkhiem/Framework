@@ -92,6 +92,11 @@ jobs:
       # The Playwright container runs as root; GitHub Actions mounts $HOME as /github/home
       # (owned by a different uid), which Firefox/WebKit refuse to launch under.
       HOME: /root
+      # The container has no GPU: WebKit's accelerated compositing / DMABUF renderer crashes the
+      # web process ("Page crashed") on media-heavy pages. Force the software rendering path.
+      # See https://github.com/microsoft/playwright/issues/21990.
+      WEBKIT_DISABLE_COMPOSITING_MODE: 1
+      WEBKIT_DISABLE_DMABUF_RENDERER: 1
     steps:
       - uses: actions/checkout@v5
       - run: npm ci
