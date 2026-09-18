@@ -29,6 +29,12 @@ All notable changes to this framework are documented here. The format follows
 - The `page` fixture records renderer crashes as a `[crash]` line in the console-errors attachment
   and in the framework log.
 
+### Changed
+
+- GitHub Actions: `upload-artifact@v7` and `download-artifact@v8` (Node 24 runtime; v5 still ran on
+  the deprecated Node 20) and jobs pinned to `ubuntu-24.04` instead of `ubuntu-latest`, which
+  migrates to Ubuntu 26.04 from October 2026.
+
 ## [2.1.0] - 2026-09-15
 
 ### Fixed
