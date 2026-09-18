@@ -7,6 +7,10 @@ import { expect, test } from '@fixtures';
 
 test.describe('Shopping cart', tags(TAGS.ui, TAGS.cart), () => {
   test.describe('adding products through the UI', tags(TAGS.smoke, TAGS.regression), () => {
+    // Every scenario walks the full browse -> product -> "Add to cart" journey once per product
+    // (up to three times) before verifying the cart. Like the place-order journeys, this
+    // legitimately exceeds the default per-test budget on slower engines (WebKit in CI).
+    test.slow();
     for (const scenario of cartTestCases) {
       test(`shows the correct items and total for ${scenario.description}`, async ({
         cartWorkflow,

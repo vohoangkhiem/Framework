@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, type Response } from '@playwright/test';
+import { config } from '../config/environment';
 import { step } from '../core/step.decorator';
 import { WaitUtils } from '../core/wait-utils';
 import { alertMessages } from '../data/static/messages';
@@ -31,9 +32,18 @@ export class ProductPage extends BasePage {
     this.addToCartButton = page.locator('#tbodyid a.btn-success', { hasText: 'Add to cart' });
   }
 
+  /**
+   * `#tbodyid` is empty when the document commits: `prod.js` first loads `config.json`, then
+   * POSTs `/view`, and only that response appends the title, price and "Add to cart" button.
+   * Readiness is therefore an API round-trip made after navigation and is budgeted like one.
+   * The default expect timeout proved too short on a loaded engine (WebKit in the CI container),
+   * where it surfaced as "element(s) not found" for `h2.name` and the button.
+   */
   async waitForReady(): Promise<void> {
+    await expect(this.title, 'product details (POST /view) were not rendered').toBeVisible({
+      timeout: config.timeouts.navigation,
+    });
     await expect(this.addToCartButton).toBeVisible();
-    await expect(this.title).not.toBeEmpty();
   }
 
   @step('Open product page for id {0}')
@@ -44,6 +54,9 @@ export class ProductPage extends BasePage {
 
   @step('Verify product details for "{0}"')
   async expectProduct(product: Pick<Product, 'name' | 'price'>): Promise<void> {
+    // Callers arrive here straight after the navigation commits; wait for the details to render
+    // so the expect budget below is spent on comparing values, not on the `/view` round-trip.
+    await this.waitForReady();
     await expect(this.title).toHaveText(product.name);
     await expect(this.price).toContainText(`$${product.price}`);
   }

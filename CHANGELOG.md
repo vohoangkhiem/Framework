@@ -3,6 +3,17 @@
 All notable changes to this framework are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow SemVer.
 
+## [Unreleased]
+
+### Fixed
+
+- `ProductPage` gave the product details only the default 10 s expect budget right after the
+  navigation committed, although `#tbodyid` is rendered from `config.json` + `POST /view`. On a
+  loaded WebKit (GitHub Actions container) this surfaced as "element(s) not found" for `h2.name`
+  and the "Add to cart" button, and the cart journeys hit the 60 s test timeout. `waitForReady()`
+  now budgets the details like a navigation, `expectProduct()` waits for readiness first, and the
+  UI cart journeys in `cart.spec.ts` declare `test.slow()` like the place-order journeys.
+
 ## [2.1.0] - 2026-09-15
 
 ### Fixed
