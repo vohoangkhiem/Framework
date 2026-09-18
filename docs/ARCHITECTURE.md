@@ -54,21 +54,22 @@ spec ──▶ test (mergeTests of base + page + auth/api + data fixtures)
 
 ## Resilience toolkit
 
-| Concern                          | Mechanism                                                                                                                                                                                             |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Element timing                   | Playwright auto-wait + web-first `expect` in page objects; Bootstrap `show` class checks                                                                                                              |
-| Async re-rendering (cart rows)   | `expect(locator).toHaveCount/ToHaveText` retries; `WaitUtils.forDomStable` for snapshots                                                                                                              |
-| Requests racing the click        | `WaitUtils.forApiResponse` registered before the action, awaited after                                                                                                                                |
-| Native dialogs                   | `handleDialog` registers `page.once('dialog')` before the action; the timeout starts only after the action completes, so slow clicks never consume the dialog budget; the listener is always detached |
-| Eventually consistent backend    | `CartPreconditions.seed` confirms read-your-writes before the UI loads; `AuthPreconditions.obtainToken` confirms `/check` accepts the token; `CartPage.expectEmpty` reloads until the API agrees      |
-| Transient API errors             | `BaseApiClient` retries 5xx/network errors with exponential backoff (never 4xx)                                                                                                                       |
-| Transient browser network errors | `BasePage.navigate` retries a navigation once on `ERR_NETWORK_CHANGED`-class errors                                                                                                                   |
-| Clicks swallowed by re-rendering | `HomePage.openProduct` re-clicks when no navigation follows; `selectCategory` waits for a stable grid                                                                                                 |
-| Animated modals stealing focus   | `ModalComponent.expectOpen` waits for the Bootstrap transition to finish before typing                                                                                                                |
-| Test isolation                   | Unique users per test (`RandomUtils.uniqueId`), one anonymous cart cookie per browser context                                                                                                         |
-| Tag-filtered runs                | `grep` / `grepInvert` applied per project; the `setup` dependency is never filtered (ADR-0005)                                                                                                        |
-| Responsive layout                | `HeaderComponent.expandMenu()` opens the collapsed navigation on phone viewports; page objects stay viewport-agnostic                                                                                 |
-| Failure diagnostics              | Trace, video, screenshot on failure + console errors + network log + the complete structured log (spec lines and framework activity)                                                                  |
+| Concern                             | Mechanism                                                                                                                                                                                             |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Element timing                      | Playwright auto-wait + web-first `expect` in page objects; Bootstrap `show` class checks                                                                                                              |
+| Async re-rendering (cart rows)      | `expect(locator).toHaveCount/ToHaveText` retries; `WaitUtils.forDomStable` for snapshots                                                                                                              |
+| Requests racing the click           | `WaitUtils.forApiResponse` registered before the action, awaited after                                                                                                                                |
+| Native dialogs                      | `handleDialog` registers `page.once('dialog')` before the action; the timeout starts only after the action completes, so slow clicks never consume the dialog budget; the listener is always detached |
+| Eventually consistent backend       | `CartPreconditions.seed` confirms read-your-writes before the UI loads; `AuthPreconditions.obtainToken` confirms `/check` accepts the token; `CartPage.expectEmpty` reloads until the API agrees      |
+| Transient API errors                | `BaseApiClient` retries 5xx/network errors with exponential backoff (never 4xx)                                                                                                                       |
+| Transient browser network errors    | `BasePage.navigate` retries a navigation once on `ERR_NETWORK_CHANGED`-class errors                                                                                                                   |
+| Clicks swallowed by re-rendering    | `HomePage.openProduct` re-clicks when no navigation follows; `selectCategory` waits for a stable grid                                                                                                 |
+| Animated modals stealing focus      | `ModalComponent.expectOpen` waits for the Bootstrap transition to finish before typing                                                                                                                |
+| Test isolation                      | Unique users per test (`RandomUtils.uniqueId`), one anonymous cart cookie per browser context                                                                                                         |
+| Tag-filtered runs                   | `grep` / `grepInvert` applied per project; the `setup` dependency is never filtered (ADR-0005)                                                                                                        |
+| Responsive layout                   | `HeaderComponent.expandMenu()` opens the collapsed navigation on phone viewports; page objects stay viewport-agnostic                                                                                 |
+| Media player in the page under test | `stubMediaPlayer` (per context, `BLOCK_MEDIA`) serves an inert video.js and aborts HLS requests, so browsers never build a media pipeline; WebKit/Linux crashed on its teardown between navigations   |
+| Failure diagnostics                 | Trace, video, screenshot on failure + console errors + network log + the complete structured log (spec lines and framework activity)                                                                  |
 
 ## Reporting
 

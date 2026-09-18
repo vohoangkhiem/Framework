@@ -1,4 +1,6 @@
 import { test as base, type ConsoleMessage } from '@playwright/test';
+import { stubMediaPlayer } from '../api/mocks/media-player-stub';
+import { config } from '../config/environment';
 import { type Logger, logger as frameworkLogger } from '../core/logger';
 import { ScreenshotUtils } from '../utils/screenshot-utils';
 
@@ -52,6 +54,18 @@ export const baseTest = base.extend<BaseFixtures>({
     await use([]);
   },
 
+  /**
+   * Every browser context (including the storage-state ones) gets the inert media player unless
+   * `BLOCK_MEDIA=false`: the application loads a video.js HLS player on each page that no test
+   * exercises, and WebKit on Linux crashed while tearing it down between navigations.
+   */
+  context: async ({ context }, use) => {
+    if (config.browser.blockMedia) {
+      await stubMediaPlayer(context);
+    }
+    await use(context);
+  },
+
   page: async ({ page, consoleErrors }, use, testInfo) => {
     const onConsole = (message: ConsoleMessage): void => {
       if (message.type() === 'error') {
@@ -61,13 +75,21 @@ export const baseTest = base.extend<BaseFixtures>({
     const onPageError = (error: Error): void => {
       consoleErrors.push(`[pageerror] ${error.message}`);
     };
+    // A crashed renderer otherwise surfaces only as timeouts or "element(s) not found" on a dead
+    // page; naming it in the attachment and the log makes the diagnosis immediate.
+    const onCrash = (): void => {
+      consoleErrors.push('[crash] The page crashed (browser renderer process died)');
+      frameworkLogger.warn('Page crashed', { url: page.url(), project: testInfo.project.name });
+    };
     page.on('console', onConsole);
     page.on('pageerror', onPageError);
+    page.on('crash', onCrash);
 
     await use(page);
 
     page.off('console', onConsole);
     page.off('pageerror', onPageError);
+    page.off('crash', onCrash);
     if (consoleErrors.length > 0 && testInfo.status !== testInfo.expectedStatus) {
       await testInfo.attach('browser-console-errors.txt', {
         body: consoleErrors.join('\n'),

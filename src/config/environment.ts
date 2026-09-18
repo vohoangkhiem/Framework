@@ -79,6 +79,7 @@ export const config = {
 
   browser: {
     headless: env.CI || env.HEADLESS,
+    blockMedia: env.BLOCK_MEDIA,
   },
 
   timeouts: {
@@ -153,6 +154,7 @@ export function describeConfig(): Record<string, string | number | boolean | und
     baseUrl: config.baseUrl,
     apiBaseUrl: config.apiBaseUrl,
     headless: config.browser.headless,
+    blockMedia: config.browser.blockMedia,
     retries: config.retries,
     workers: config.workers,
     tags: config.tags.include,

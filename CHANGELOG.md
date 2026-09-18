@@ -7,12 +7,27 @@ All notable changes to this framework are documented here. The format follows
 
 ### Fixed
 
+- WebKit in the GitHub Actions container crashed on every second navigation within a test (home
+  -> product, login reload, header -> cart, delete-item reload): explicit `Page crashed` errors, or a
+  dead page reported as "element(s) not found" / `Received: undefined` for the product title and
+  the welcome text. Chromium and Firefox ran the identical steps green, so this is not an
+  application defect. Root cause: every Demoblaze page instantiates a video.js HLS player (in a
+  modal no test opens) whose MediaSource is backed by a GStreamer pipeline on WebKit/Linux, and
+  that pipeline's teardown killed the renderer. `stubMediaPlayer` (`src/api/mocks`) now serves an
+  inert `videojs` and aborts HLS traffic for every browser context (`BLOCK_MEDIA`, default `true`).
 - `ProductPage` gave the product details only the default 10 s expect budget right after the
   navigation committed, although `#tbodyid` is rendered from `config.json` + `POST /view`. On a
   loaded WebKit (GitHub Actions container) this surfaced as "element(s) not found" for `h2.name`
   and the "Add to cart" button, and the cart journeys hit the 60 s test timeout. `waitForReady()`
   now budgets the details like a navigation, `expectProduct()` waits for readiness first, and the
   UI cart journeys in `cart.spec.ts` declare `test.slow()` like the place-order journeys.
+
+### Added
+
+- `BLOCK_MEDIA` environment variable; `tests/framework/media-player-stub.spec.ts` covers the URL
+  matchers, the inert player and the aborted HLS requests.
+- The `page` fixture records renderer crashes as a `[crash]` line in the console-errors attachment
+  and in the framework log.
 
 ## [2.1.0] - 2026-09-15
 

@@ -16,6 +16,12 @@ export const envSchema = z.object({
   TEST_PASSWORD: z.string().default(''),
 
   HEADLESS: z.stringbool().default(true),
+  /**
+   * Serve an inert stand-in for the application's video.js HLS player and abort HLS traffic.
+   * The player is never exercised by tests, and WebKit on Linux crashed while tearing its media
+   * pipeline down between navigations. Set to false to load the real player.
+   */
+  BLOCK_MEDIA: z.stringbool().default(true),
 
   DEFAULT_TIMEOUT: z.coerce.number().int().positive().default(60_000),
   ACTION_TIMEOUT: z.coerce.number().int().positive().default(15_000),
