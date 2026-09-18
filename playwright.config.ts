@@ -151,6 +151,9 @@ export default defineConfig({
       testIgnore: DESKTOP_IGNORE,
       dependencies: ['setup'],
       ...tagFilter,
+      // WebKit is less stable under CI container pressure; keep it single-worker to avoid
+      // renderer crashes ("Page crashed") observed in sharded GitHub Actions runs.
+      workers: config.isCI ? 1 : undefined,
       use: { ...devices['Desktop Safari'] },
     },
     {
