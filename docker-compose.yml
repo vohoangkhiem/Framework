@@ -16,6 +16,10 @@ services:
       EXCLUDE_TAGS: ${EXCLUDE_TAGS:-@wip|@flaky}
       WORKERS: ${WORKERS:-2}
       LOG_FORMAT: json
+      # No GPU in the container: WebKit's accelerated compositing / DMABUF renderer crashes the
+      # web process ("Page crashed"). Force the software rendering path.
+      WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+      WEBKIT_DISABLE_DMABUF_RENDERER: "1"
     volumes:
       - ./playwright-report:/app/playwright-report
       - ./test-results:/app/test-results
