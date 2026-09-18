@@ -383,7 +383,7 @@ demos can also be executed without a local Node installation:
 - Reporters: `list` (console), `html` (`playwright-report/`), `junit` (`test-results/junit.xml`),
   `json` (`test-results/results.json`), `SummaryReporter` (`src/reporting`: per-project pass/fail
   table printed to the console, saved as `test-results/summary.md` and appended to the GitHub
-  Actions job summary); in CI also `blob` (`blob-report/`) for merging shards.
+  Actions job summary); in CI also `blob` (`blob-report/`) for merging shards and `github` (each failed test as an annotation on the Actions run).
 - On failure: trace (`npx playwright show-trace`), video, screenshot, browser console errors,
   the complete structured log of the test (its own lines plus every API call, precondition,
   mocked route and navigation retry the framework performed for it) and, when the

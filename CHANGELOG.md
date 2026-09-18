@@ -28,6 +28,8 @@ All notable changes to this framework are documented here. The format follows
   matchers, the inert player and the aborted HLS requests.
 - The `page` fixture records renderer crashes as a `[crash]` line in the console-errors attachment
   and in the framework log.
+- `github` reporter in CI: every failed test is an annotation on the Actions run, readable without
+  downloading the report artifact.
 
 ### Changed
 

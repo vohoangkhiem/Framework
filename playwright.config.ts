@@ -49,10 +49,13 @@ const summaryReporter: ReporterDescription = [
   { outputFile: path.join(config.paths.testResults, 'summary.md') },
 ];
 
-// In CI the blob reporter is added so that sharded runs can be merged with `npm run report:merge`.
+// In CI the blob reporter is added so that sharded runs can be merged with `npm run report:merge`,
+// and the github reporter surfaces every failed test as an annotation on the Actions run, so the
+// failure is readable without downloading the report artifact.
 const reporters: ReporterDescription[] = config.isCI
   ? [
       ['list'],
+      ['github'],
       ['blob', { outputDir: config.paths.blobReport }],
       junitReporter,
       jsonReporter,
