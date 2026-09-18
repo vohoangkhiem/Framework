@@ -46,6 +46,9 @@ jobs:
     timeout-minutes: 15
     container:
       image: mcr.microsoft.com/playwright:v1.61.1-jammy
+      # Share the host IPC namespace: the default container /dev/shm (64 MB) is too small for
+      # browser shared-memory rendering buffers and makes WebKit crash with "Page crashed".
+      options: --ipc=host
     env:
       # The Playwright container runs as root; GitHub Actions mounts $HOME as /github/home
       # (owned by a different uid), which Firefox/WebKit refuse to launch under.
@@ -74,6 +77,9 @@ jobs:
     timeout-minutes: 40
     container:
       image: mcr.microsoft.com/playwright:v1.61.1-jammy
+      # Share the host IPC namespace: the default container /dev/shm (64 MB) is too small for
+      # browser shared-memory rendering buffers and makes WebKit crash with "Page crashed".
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -86,6 +92,11 @@ jobs:
       # The Playwright container runs as root; GitHub Actions mounts $HOME as /github/home
       # (owned by a different uid), which Firefox/WebKit refuse to launch under.
       HOME: /root
+      # The container has no GPU: WebKit's accelerated compositing / DMABUF renderer crashes the
+      # web process ("Page crashed") on media-heavy pages. Force the software rendering path.
+      # See https://github.com/microsoft/playwright/issues/21990.
+      WEBKIT_DISABLE_COMPOSITING_MODE: 1
+      WEBKIT_DISABLE_DMABUF_RENDERER: 1
     steps:
       - uses: actions/checkout@v5
       - run: npm ci
