@@ -3,7 +3,7 @@
 All notable changes to this framework are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow SemVer.
 
-## [Unreleased]
+## [2.2.0] - 2026-09-19
 
 ### Fixed
 

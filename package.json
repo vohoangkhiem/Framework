@@ -1,7 +1,12 @@
 {
   "name": "demoblaze-playwright-framework",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Scalable, production-ready UI & API test automation framework built with Playwright and TypeScript",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vohoangkhiem/Framework.git"
+  },
+  "homepage": "https://github.com/vohoangkhiem/Framework#readme",
   "private": true,
   "license": "UNLICENSED",
   "author": "Khiem Vo",

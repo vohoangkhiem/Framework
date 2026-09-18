@@ -403,9 +403,6 @@ demos can also be executed without a local Node installation:
 - **Husky + lint-staged**: `pre-commit` runs ESLint/Prettier on staged files and a type check;
   `commit-msg` enforces Conventional Commits. Hooks install automatically via `npm ci` once the
   folder is a git repository (`git init && npm run prepare`).
-  > **Temporarily disabled:** the Conventional Commits title check is commented out in
-  > `.husky/commit-msg` (`pre-commit` still runs lint-staged + typecheck as normal). To re-enable,
-  > uncomment the `node scripts/verify-commit-msg.js "$1"` line in that file.
 - `npm run validate` = typecheck + lint + format check; CI runs it as the quality gate.
 - `npm run test:framework` runs the framework's own regression tests (`tests/framework`): the
   dialog helper's timing contract, retry/backoff semantics, environment schema validation and the
@@ -437,12 +434,6 @@ To run it: create a Pipeline job pointing at this repository (`Jenkinsfile` at t
 `demoblaze-test-user` credential, then "Build with Parameters".
 
 ### GitHub Actions
-
-> **Temporarily disabled:** the `push`, `pull_request` and nightly `schedule` triggers in
-> `.github/workflows/playwright.yml` are commented out, so this pipeline currently only runs via
-> manual **"Run workflow"** (`workflow_dispatch`). To re-enable, uncomment the `push:`,
-> `pull_request:` and `schedule:` blocks under `on:` in that file. `manual-tests.yml` is unaffected
-> (it only ever ran on-demand).
 
 - `playwright.yml`: quality gate job, browser-less API + framework self-test job, UI matrix
   sharded 3 ways across Chromium/Firefox/WebKit inside the official Playwright container, and a
